@@ -90,6 +90,7 @@ namespace Hickz
 					}
 				};
 				PersistentMessages.persistentMessages.Remove(channelId);
+
 				await Context.Channel.SendMessageAsync("", false, embed.Build());
 				await Context.Message.DeleteAsync();
 			}
