@@ -31,7 +31,7 @@ namespace Hickz
             _client.Ready += ClientReadyAsync;
             _client.MessageReceived += HandleCommandAsync;
 			_client.ReactionAdded += _client_ReactionAdded;
-        }
+		}
 
 		private async Task _client_ReactionAdded(Cacheable<IUserMessage, ulong> user, Cacheable<IMessageChannel, ulong> message, SocketReaction react)
 		{
@@ -40,6 +40,7 @@ namespace Hickz
 				if (react.UserId == key)
 				{
 					JObject config = Functions.GetConfig();
+					Console.WriteLine(react.Emote.Name);
 					if (react.Emote.Name == "hickz")
 					{
 						Stopwatch watcher = new Stopwatch();
@@ -58,7 +59,7 @@ namespace Hickz
 								break;
 							}
 						}
-						Console.WriteLine(value.Message.Content); // Marche
+
 						if (currentTicketChannel == null)
 						{
 							var channelPermisssions = new ChannelPermissions(false, false, false, false, false);
@@ -84,7 +85,7 @@ namespace Hickz
 							{
 								Color = Color.DarkTeal,
 								Title = "📩 • Ticket de support",
-								Description = $"Message envoyé à la demande d'ouverture :\n\n",
+								Description = $"Message envoyé à la demande d'ouverture :\n{value.Message.Content}",
 								Timestamp = DateTime.Now,
 								Footer = new EmbedFooterBuilder()
 								{
@@ -96,6 +97,7 @@ namespace Hickz
 							var supportMessage = await channel.SendMessageAsync(text: socketGuild.GetRole(JsonConvert.DeserializeObject<ulong>(config["hickzSupportRoleId"].ToString())).Mention, embed: embed.Build());
 							supportMessage.PinAsync().Wait();
 							await value.Message.ReplyAsync($"Ticket créé, rendez-vous dans : {channel.Mention} 👋");
+							usersWaiting.Remove(key);
 						}
 						else
 						{
@@ -104,7 +106,8 @@ namespace Hickz
 					}
 					else
 					{
-						Console.WriteLine("pas bon emote");
+						usersWaiting.Remove(key);
+						await value.Message.ReplyAsync($"Ouverture du ticket annulée.");
 					}
 					break;
 				}
@@ -175,19 +178,19 @@ namespace Hickz
 					{
 						Color = Color.DarkTeal,
 						Title = "📩 • Ticket de support",
-						Description = $"Cochez la réaction pour valider la création du ticket",
+						Description = $"Cochez la réaction pour valider la création du ticket avec en raison d'ouverture :\n{rawMessage.Content}",
 						Timestamp = DateTime.Now,
 						Footer = new EmbedFooterBuilder()
 						{
 							IconUrl = Functions.GetAvatarUrl(rawMessage.Author, 32),
-							Text = rawMessage.Author.Username + "#" + rawMessage.Author.Discriminator
+							Text = "Pour annuler l'ouverture, cochez la croix.Pour annuler l'ouverture, cochez la croix."
 						}
 					};
 
 
 					var confirmationMsg = await rawMessage.Channel.SendMessageAsync(embed: confirmation.Build());
 					IEmote emote = _client.GetGuild(JsonConvert.DeserializeObject<ulong>(config["hickzDiscordServerId"].ToString())).Emotes.First(e => e.Name == "hickz");
-					await confirmationMsg.AddReactionAsync(emote);
+					await confirmationMsg.AddReactionsAsync(new[] { emote, new Emoji("❌") });
 					usersWaiting.Add(rawMessage.Author.Id, context);
 				}
 			}
