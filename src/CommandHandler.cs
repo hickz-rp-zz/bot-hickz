@@ -107,7 +107,7 @@ namespace Hickz
 					else
 					{
 						usersWaiting.Remove(key);
-						await value.Message.ReplyAsync($"Ouverture du ticket annulée.");
+						await value.Channel.SendMessageAsync($"Ouverture du ticket annulée.");
 					}
 					break;
 				}
