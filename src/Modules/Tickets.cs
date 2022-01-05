@@ -21,7 +21,7 @@ namespace Hickz
 			{
 				Color = Color.DarkRed,
 				Title = "📩 • Ticket de support : Fermeture de votre ticket.",
-				Description = $"Le staff a supprimé votre ticket avec comme raison : \n*{reason}*",
+				Description = $"Le staff a supprimé votre ticket avec comme raison : \n*{reason}*\n\n|| Ne répondez pas à ce message ||",
 				Timestamp = DateTime.Now,
 				Footer = new EmbedFooterBuilder()
 				{

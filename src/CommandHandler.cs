@@ -19,6 +19,7 @@ namespace Hickz
 		private readonly CommandService _commands;
         private readonly DiscordSocketClient _client;
         private readonly IServiceProvider _services;
+		private Dictionary<ulong, SocketCommandContext> usersWaiting = new Dictionary<ulong, SocketCommandContext>();
 
 		public CommandHandlingService(IServiceProvider services)
         {
@@ -29,39 +30,104 @@ namespace Hickz
             // Event handlers
             _client.Ready += ClientReadyAsync;
             _client.MessageReceived += HandleCommandAsync;
-        }
+			_client.ReactionAdded += _client_ReactionAdded;
+		}
 
-        private async Task HandleCommandAsync(SocketMessage rawMessage)
+		private async Task _client_ReactionAdded(Cacheable<IUserMessage, ulong> user, Cacheable<IMessageChannel, ulong> message, SocketReaction react)
+		{
+			foreach (var (key, value) in usersWaiting)
+			{
+				if (react.UserId == key)
+				{
+					JObject config = Functions.GetConfig();
+					Console.WriteLine(react.Emote.Name);
+					if (react.Emote.Name == "hickz")
+					{
+						Stopwatch watcher = new Stopwatch();
+
+						var socketGuild = _client.GetGuild(JsonConvert.DeserializeObject<ulong>(config["hickzDiscordServerId"].ToString()));
+						var author = _client.GetUser(key);
+						var channelPermisssions = new ChannelPermissions(false, false, false, false, false);
+
+						OverwritePermissions perms = new OverwritePermissions(
+							viewChannel: PermValue.Allow,
+							sendMessages: PermValue.Allow,
+							attachFiles: PermValue.Allow,
+							readMessageHistory: PermValue.Allow);
+
+						var channel = await socketGuild.CreateTextChannelAsync("aide-" + author.Username, prop => {
+							prop.CategoryId = JsonConvert.DeserializeObject<ulong>(config["hickzSupportCategoryId"].ToString());
+							prop.Topic = "Ticket d'assistance pour " + author.Mention;
+							prop.PermissionOverwrites = new List<Overwrite>
+							{
+								new Overwrite(socketGuild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny)),
+								new Overwrite(JsonConvert.DeserializeObject<ulong>(config["hickzSupportRoleId"].ToString()), PermissionTarget.Role, perms),
+								new Overwrite(author.Id, PermissionTarget.User, perms)
+							};
+						});
+
+						var embed = new EmbedBuilder
+						{
+							Color = Color.DarkTeal,
+							Title = "📩 • Ticket de support",
+							Description = $"Message envoyé à la demande d'ouverture :\n{value.Message.Content}",
+							Timestamp = DateTime.Now,
+							Footer = new EmbedFooterBuilder()
+							{
+								IconUrl = Functions.GetAvatarUrl(author, 32),
+								Text = author.Username + "#" + author.Discriminator
+							}
+						};
+
+						var supportMessage = await channel.SendMessageAsync(text: socketGuild.GetRole(JsonConvert.DeserializeObject<ulong>(config["hickzSupportRoleId"].ToString())).Mention, embed: embed.Build());
+						supportMessage.PinAsync().Wait();
+						await value.Message.ReplyAsync($"Ticket créé, rendez-vous dans : {channel.Mention} 👋");
+						usersWaiting.Remove(key);
+					}
+					else
+					{
+						usersWaiting.Remove(key);
+						await value.Channel.SendMessageAsync($"Ouverture du ticket annulée.");
+					}
+					break;
+				}
+			}
+		}
+
+		private async Task HandleCommandAsync(SocketMessage rawMessage)
         {
 			if (rawMessage.Author.IsBot || !(rawMessage is SocketUserMessage message))
 				return;
 
-			if (PersistentMessages.persistentMessages != null)
+			if (!(rawMessage.Channel is IPrivateChannel))
 			{
-				JObject cfg = Functions.GetConfig();
-				var channelInfo = rawMessage.Channel as SocketGuildChannel;
-				if (channelInfo.Guild.Id == JsonConvert.DeserializeObject<ulong>(cfg["hickzDiscordServerId"].ToString()))
+				if (PersistentMessages.persistentMessages != null)
 				{
-					List<ulong> needModification = new List<ulong>();
-					foreach (var (key, value) in PersistentMessages.persistentMessages)
+					JObject cfg = Functions.GetConfig();
+					var channelInfo = rawMessage.Channel as SocketGuildChannel;
+					if (channelInfo.Guild.Id == JsonConvert.DeserializeObject<ulong>(cfg["hickzDiscordServerId"].ToString()))
 					{
-						if (rawMessage.Channel.Id == key)
+						List<ulong> needModification = new List<ulong>();
+						foreach (var (key, value) in PersistentMessages.persistentMessages)
 						{
-							needModification.Add(key);
-						}
-					}
-
-					if (needModification.Count > 0)
-					{
-						foreach (ulong channelId in needModification)
-						{
-							await rawMessage.Channel.GetCachedMessage(PersistentMessages.persistentMessages[channelId].lastMessage).DeleteAsync();
-
-							PersistentMessages.persistentMessages[channelId] = new PersistentMessages.StructPersistentMessages
+							if (rawMessage.Channel.Id == key)
 							{
-								embed = PersistentMessages.persistentMessages[channelId].embed,
-								lastMessage = rawMessage.Channel.SendMessageAsync("", false, PersistentMessages.persistentMessages[channelId].embed.Build()).Result.Id
-							};
+								needModification.Add(key);
+							}
+						}
+
+						if (needModification.Count > 0)
+						{
+							foreach (ulong channelId in needModification)
+							{
+								await rawMessage.Channel.GetCachedMessage(PersistentMessages.persistentMessages[channelId].lastMessage).DeleteAsync();
+
+								PersistentMessages.persistentMessages[channelId] = new PersistentMessages.StructPersistentMessages
+								{
+									embed = PersistentMessages.persistentMessages[channelId].embed,
+									lastMessage = rawMessage.Channel.SendMessageAsync("", false, PersistentMessages.persistentMessages[channelId].embed.Build()).Result.Id
+								};
+							}
 						}
 					}
 				}
@@ -85,13 +151,25 @@ namespace Hickz
 			{
 				if (rawMessage.Channel is IPrivateChannel) // Création de ticket de support si mp DM
 				{
-					Stopwatch watcher = new Stopwatch();
+					if (usersWaiting.ContainsKey(rawMessage.Author.Id))
+					{
+						var embedWaiting = new EmbedBuilder
+						{
+							Color = Color.Red,
+							Title = "📩 • Ticket de support",
+							Description = $"Vous avez un ticket en attente de confirmation pour sa création.",
+							Timestamp = DateTime.Now,
+						};
+
+						await context.Message.ReplyAsync(embed: embedWaiting.Build());
+						return;
+					}
 
 					var socketGuild = _client.GetGuild(JsonConvert.DeserializeObject<ulong>(config["hickzDiscordServerId"].ToString()));
 					var socketCategoryChannel = socketGuild.GetCategoryChannel(JsonConvert.DeserializeObject<ulong>(config["hickzSupportCategoryId"].ToString()));
 
 					ulong? currentTicketChannel = null;
-					foreach(var categoryChannel in socketCategoryChannel.Channels)
+					foreach (var categoryChannel in socketCategoryChannel.Channels)
 					{
 						var properties = categoryChannel as ITextChannel;
 						if (properties.Topic == "Ticket d'assistance pour " + rawMessage.Author.Mention)
@@ -103,41 +181,23 @@ namespace Hickz
 
 					if (currentTicketChannel == null)
 					{
-						var channelPermisssions = new ChannelPermissions(false, false, false, false, false);
-
-						OverwritePermissions perms = new OverwritePermissions(
-							viewChannel: PermValue.Allow,
-							sendMessages: PermValue.Allow,
-							attachFiles: PermValue.Allow,
-							readMessageHistory: PermValue.Allow);
-
-						var channel = await socketGuild.CreateTextChannelAsync("aide-" + rawMessage.Author.Username, prop => {
-							prop.CategoryId = JsonConvert.DeserializeObject<ulong>(config["hickzSupportCategoryId"].ToString());
-							prop.Topic = "Ticket d'assistance pour " + rawMessage.Author.Mention;
-							prop.PermissionOverwrites = new List<Overwrite>
-							{
-								new Overwrite(socketGuild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny)),
-								new Overwrite(JsonConvert.DeserializeObject<ulong>(config["hickzSupportRoleId"].ToString()), PermissionTarget.Role, perms),
-								new Overwrite(rawMessage.Author.Id, PermissionTarget.User, perms)
-							};
-						});
-
-						var embed = new EmbedBuilder
+						var confirmation = new EmbedBuilder
 						{
 							Color = Color.DarkTeal,
 							Title = "📩 • Ticket de support",
-							Description = $"Message envoyé à la demande d'ouverture :\n\n{rawMessage.Content}",
+							Description = $"Cochez la réaction pour valider la création du ticket avec en raison d'ouverture :\n{rawMessage.Content}",
 							Timestamp = DateTime.Now,
 							Footer = new EmbedFooterBuilder()
 							{
 								IconUrl = Functions.GetAvatarUrl(rawMessage.Author, 32),
-								Text = rawMessage.Author.Username + "#" + rawMessage.Author.Discriminator
+								Text = "Pour annuler l'ouverture, cochez la croix.Pour annuler l'ouverture, cochez la croix."
 							}
 						};
 
-						var supportMessage = await channel.SendMessageAsync(text: socketGuild.GetRole(JsonConvert.DeserializeObject<ulong>(config["hickzSupportRoleId"].ToString())).Mention, embed: embed.Build());
-						supportMessage.PinAsync().Wait();
-						await context.Message.ReplyAsync($"Ticket créé, rendez-vous dans : {channel.Mention} 👋");
+						var confirmationMsg = await rawMessage.Channel.SendMessageAsync(embed: confirmation.Build());
+						IEmote emote = _client.GetGuild(JsonConvert.DeserializeObject<ulong>(config["hickzDiscordServerId"].ToString())).Emotes.First(e => e.Name == "hickz");
+						await confirmationMsg.AddReactionsAsync(new[] { emote, new Emoji("❌") });
+						usersWaiting.Add(rawMessage.Author.Id, context);
 					}
 					else
 					{
