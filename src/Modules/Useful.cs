@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace Hickz
 {
@@ -44,6 +45,20 @@ namespace Hickz
 					Text = Context.User.Username + "#" + Context.User.Discriminator
 				}
 			};
+
+			if (!Directory.Exists("db"))
+				Directory.CreateDirectory("db");
+
+			if (!File.Exists("db/persistent.db"))
+				File.Create("db/persistent.db").Close();
+
+			Database database = new Database(@"URI=file:db\persistent.db");
+
+			if (database.IsTableExisting("persistent"))
+				database.CreateTable("persistent", "channel_id BIGINT PRIMARY KEY, embed_content VARCHAR(255), last_msg_id BIGINT");
+
+
+			database.Insert($"INSERT INTO persistent (channel_id, embed_content, last_msg_id) VALUES (@1, @2, @3)", Context.Channel.Id, text, Context.Channel.SendMessageAsync("", false, embed.Build()).Result.Id);
 
 			if (PersistentMessages.persistentMessages == null)
 			{
