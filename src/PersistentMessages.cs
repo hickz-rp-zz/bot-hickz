@@ -7,12 +7,10 @@ namespace Hickz
 {
 	internal class PersistentMessages
 	{
-		public struct StructPersistentMessages
-		{
-			public EmbedBuilder embed;
-			public ulong lastMessage;
-		}
-
-		public static Dictionary<ulong, StructPersistentMessages> persistentMessages { get; set; }
+		// Object structure :
+		// 0 -> Message Id
+		// 1 -> Message Content
+		// 2 -> Author Id
+		public static Dictionary<ulong, object[]> Channels = new Dictionary<ulong, object[]>();
 	}
 }

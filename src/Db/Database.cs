@@ -13,15 +13,6 @@ namespace Hickz
 		{
 			con = new SQLiteConnection(connectionString);
 			con.Open();
-
-		}
-
-		public SQLiteDataReader Read(string request)
-		{
-			using var cmd = new SQLiteCommand(request, con);
-			using SQLiteDataReader rdr = cmd.ExecuteReader();
-
-			return rdr;
 		}
 
 		public void Insert(params object[] requestInformations)
@@ -45,6 +36,7 @@ namespace Hickz
 			using var cmd = new SQLiteCommand(con);
 
 			cmd.CommandText = $@"CREATE TABLE {name}({parameters})";
+			Console.WriteLine("created");
 			cmd.ExecuteNonQuery();
 		}
 
@@ -52,15 +44,33 @@ namespace Hickz
 		{
 			using var cmd = new SQLiteCommand(con);
 			cmd.CommandText = $"SELECT name FROM sqlite_master WHERE type='table' AND name='{name}'";
-
-			return cmd.ExecuteScalar() != null;
+			return cmd.ExecuteReader().HasRows;
 		}
 
-		~Database()
+		public SQLiteDataReader GetValuesFromTable(string tableName, string selection = "*", string parameters = "")
 		{
-			con.Close();
-			con.Dispose();
-			Console.WriteLine(" ############################## Database destructed ############################## ");
+			using var cmd = new SQLiteCommand(con);
+			cmd.CommandText = $"SELECT {selection} FROM {tableName} {parameters}";
+			
+			return cmd.ExecuteReader();
 		}
+
+		public void Delete(string tableName, string whereCondition)
+		{
+			using var cmd = new SQLiteCommand(con);
+			cmd.CommandText = $"DELETE FROM {tableName} {whereCondition}";
+
+			cmd.ExecuteNonQuery();
+		}
+
+		public void Update(string tableName, string setInstructions)
+		{
+			using var cmd = new SQLiteCommand(con);
+			cmd.CommandText = $"UPDATE {tableName} {setInstructions}";
+
+			cmd.ExecuteNonQuery();
+		}
+
+		~Database() => con.Dispose();
 	}
 }
