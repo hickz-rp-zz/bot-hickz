@@ -20,6 +20,7 @@ namespace Hickz
         private readonly DiscordSocketClient _client;
         private readonly IServiceProvider _services;
 		private Dictionary<ulong, SocketCommandContext> usersWaiting = new Dictionary<ulong, SocketCommandContext>();
+		private Database database;
 
 		public CommandHandlingService(IServiceProvider services)
         {
@@ -101,33 +102,43 @@ namespace Hickz
 
 			if (!(rawMessage.Channel is IPrivateChannel))
 			{
-				if (PersistentMessages.persistentMessages != null)
+				if (PersistentMessages.Channels.Count > 0)
 				{
 					JObject cfg = Functions.GetConfig();
 					var channelInfo = rawMessage.Channel as SocketGuildChannel;
 					if (channelInfo.Guild.Id == JsonConvert.DeserializeObject<ulong>(cfg["hickzDiscordServerId"].ToString()))
 					{
-						List<ulong> needModification = new List<ulong>();
-						foreach (var (key, value) in PersistentMessages.persistentMessages)
+						if (PersistentMessages.Channels.ContainsKey(channelInfo.Id))
 						{
-							if (rawMessage.Channel.Id == key)
-							{
-								needModification.Add(key);
-							}
-						}
+							ulong messageId = (ulong)PersistentMessages.Channels[channelInfo.Id][0];
+							string description = PersistentMessages.Channels[channelInfo.Id][1].ToString();
+							SocketUser baseAuthor = _client.GetUser((ulong)PersistentMessages.Channels[channelInfo.Id][2]);
 
-						if (needModification.Count > 0)
-						{
-							foreach (ulong channelId in needModification)
+							var embed = new EmbedBuilder
 							{
-								await rawMessage.Channel.GetCachedMessage(PersistentMessages.persistentMessages[channelId].lastMessage).DeleteAsync();
-
-								PersistentMessages.persistentMessages[channelId] = new PersistentMessages.StructPersistentMessages
+								Color = Color.Green,
+								Title = "Message persistant :",
+								Description = description,
+								Footer = new EmbedFooterBuilder()
 								{
-									embed = PersistentMessages.persistentMessages[channelId].embed,
-									lastMessage = rawMessage.Channel.SendMessageAsync("", false, PersistentMessages.persistentMessages[channelId].embed.Build()).Result.Id
-								};
-							}
+									IconUrl = Functions.GetAvatarUrl(baseAuthor, 32),
+									Text = baseAuthor.Username + "#" + baseAuthor.Discriminator
+								}
+							};
+							
+							ulong sendedMessageId = rawMessage.Channel.SendMessageAsync(embed: embed.Build()).Result.Id;
+							PersistentMessages.Channels[channelInfo.Id] = new object[] { sendedMessageId, description, baseAuthor.Id };
+							if (database == null)
+								database = Functions.InitializeDatabase(@"URI=file:db\persistent.db");
+
+							database.Update("persistent", $"SET last_msg_id = {sendedMessageId} WHERE channel_id = {channelInfo.Id}");
+
+							var channelMessages = await rawMessage.Channel.GetMessagesAsync(10, CacheMode.AllowDownload).FlattenAsync();
+							foreach (var msg in channelMessages)
+								if (msg.Embeds.Count > 0)
+									foreach (var _embed in msg.Embeds)
+										if (_embed.Title == "Message persistant :")
+											await msg.DeleteAsync();
 						}
 					}
 				}
