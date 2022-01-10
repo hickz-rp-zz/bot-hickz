@@ -29,6 +29,7 @@ namespace Hickz
 			}
 
 			cmd.ExecuteNonQuery();
+			cmd.Dispose();
 		}
 
 		public void CreateTable(string name, string parameters)
@@ -38,12 +39,14 @@ namespace Hickz
 			cmd.CommandText = $@"CREATE TABLE {name}({parameters})";
 			Console.WriteLine("created");
 			cmd.ExecuteNonQuery();
+			cmd.Dispose();
 		}
 
 		public bool IsTableExisting(string name)
 		{
 			using var cmd = new SQLiteCommand(con);
 			cmd.CommandText = $"SELECT name FROM sqlite_master WHERE type='table' AND name='{name}'";
+
 			return cmd.ExecuteReader().HasRows;
 		}
 
@@ -61,6 +64,7 @@ namespace Hickz
 			cmd.CommandText = $"DELETE FROM {tableName} {whereCondition}";
 
 			cmd.ExecuteNonQuery();
+			cmd.Dispose();
 		}
 
 		public void Update(string tableName, string setInstructions)
@@ -69,6 +73,13 @@ namespace Hickz
 			cmd.CommandText = $"UPDATE {tableName} {setInstructions}";
 
 			cmd.ExecuteNonQuery();
+			cmd.Dispose();
+		}
+
+		public void Close()
+		{
+			con.Close();
+			con.Dispose();
 		}
 
 		~Database() => con.Dispose();

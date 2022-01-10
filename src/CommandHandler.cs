@@ -31,10 +31,10 @@ namespace Hickz
             // Event handlers
             _client.Ready += ClientReadyAsync;
             _client.MessageReceived += HandleCommandAsync;
-			_client.ReactionAdded += _client_ReactionAdded;
+			_client.ReactionAdded += ReactionAdded;
 		}
 
-		private async Task _client_ReactionAdded(Cacheable<IUserMessage, ulong> user, Cacheable<IMessageChannel, ulong> message, SocketReaction react)
+		private async Task ReactionAdded(Cacheable<IUserMessage, ulong> user, Cacheable<IMessageChannel, ulong> message, SocketReaction react)
 		{
 			foreach (var (key, value) in usersWaiting)
 			{
@@ -132,6 +132,8 @@ namespace Hickz
 								database = Functions.InitializeDatabase(@"URI=file:db\persistent.db");
 
 							database.Update("persistent", $"SET last_msg_id = {sendedMessageId} WHERE channel_id = {channelInfo.Id}");
+							database.Close();
+							database = null;
 
 							var channelMessages = await rawMessage.Channel.GetMessagesAsync(10, CacheMode.AllowDownload).FlattenAsync();
 							foreach (var msg in channelMessages)

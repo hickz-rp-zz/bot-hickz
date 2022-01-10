@@ -14,8 +14,10 @@ namespace Hickz
 	{
 		[Command("persistent")]
 		[RequireUserPermission(GuildPermission.Administrator)]
-		public async Task PersistentMessage([Remainder] string text = "")
+		public async Task PersistentMessage(string rgb = "0,255,0", [Remainder] string text = "")
 		{
+			string[] _rgb = rgb.Split(',');
+
 			if (text == "")
 			{
 				var errorEmbed = new EmbedBuilder
@@ -36,7 +38,7 @@ namespace Hickz
 
 			var embed = new EmbedBuilder
 			{
-				Color = Color.Green,
+				Color = new Color(Convert.ToByte(_rgb[0]), Convert.ToByte(_rgb[1]), Convert.ToByte(_rgb[2])),
 				Title = "Message persistant :",
 				Description = text,
 				Footer = new EmbedFooterBuilder()
@@ -54,74 +56,58 @@ namespace Hickz
 			ulong messageId = Context.Channel.SendMessageAsync("", false, embed.Build()).Result.Id;
 			PersistentMessages.Channels.Add(Context.Channel.Id, new object[] { messageId, text, Context.User.Id });
 			database.Insert($"INSERT INTO persistent (channel_id, embed_content, last_msg_id, author_id) VALUES (@1, @2, @3, @4)", Context.Channel.Id, text, messageId, Context.User.Id);
+			database.Close();
 		}
 
 		[Command("rempersistent")]
 		[RequireUserPermission(GuildPermission.Administrator)]
 		public async Task RemovePersistentMessage()
 		{
-			Database database = Functions.InitializeDatabase(@"URI=file:db\persistent.db");
-
-			bool tableExisting = false;
-			if (database.IsTableExisting("persistent"))
-				tableExisting = true;
-
 			ulong channelId = Context.Channel.Id;
-			var reader = database.GetValuesFromTable("persistent", parameters: $"WHERE channel_id = {channelId}");
 
-			ulong lastMessageId = 0;
-			string description = "";
-			while (reader.Read() && lastMessageId == 0)
-			{
-				if ((ulong)reader.GetInt64(0) == channelId)
-				{
-					lastMessageId = (ulong)reader.GetInt64(2);
-					description = reader.GetString(1);
-				}
-			}
-			reader.Close();
-
-			if (tableExisting && lastMessageId != 0)
+			if (PersistentMessages.Channels.ContainsKey(channelId))
 			{
 				var channelMessages = await Context.Channel.GetMessagesAsync(100, CacheMode.AllowDownload).FlattenAsync();
 
 				foreach (var message in channelMessages)
-					if (message.Id == lastMessageId)
+					if (message.Id == (ulong)PersistentMessages.Channels[channelId][0])
 						await message.DeleteAsync();
 
-				var embed = new EmbedBuilder
+				var confirmationEmbed = new EmbedBuilder
 				{
 					Color = Color.Orange,
 					Title = "Message persistant :",
-					Description = "Suppression du message persistant :\n> " + description,
+					Description = "Suppression du message persistant :\n> " + PersistentMessages.Channels[channelId][1].ToString(),
 					Footer = new EmbedFooterBuilder()
 					{
 						IconUrl = Functions.GetAvatarUrl(Context.User, 32),
 						Text = Context.User.Username + "#" + Context.User.Discriminator
 					}
 				};
+
+				Database database = Functions.InitializeDatabase(@"URI=file:db\persistent.db");
+				database.Delete("persistent", $"WHERE last_msg_id = {PersistentMessages.Channels[channelId][0]} OR channel_id = {channelId}");
+				database.Close();
 
 				PersistentMessages.Channels.Remove(Context.Channel.Id);
-				database.Delete("persistent", $"WHERE last_msg_id = {lastMessageId} OR channel_id = {channelId}");
 
-				await Context.Channel.SendMessageAsync("", false, embed.Build());
+				await Context.Channel.SendMessageAsync("", false, confirmationEmbed.Build());
 				await Context.Message.DeleteAsync();
+				return;
 			}
-			else
+
+			var embed = new EmbedBuilder
 			{
-				var embed = new EmbedBuilder
+				Color = Color.Orange,
+				Title = "Message persistant :",
+				Description = "Aucun message persistant n'a été trouvé dans ce channel.",
+				Footer = new EmbedFooterBuilder()
 				{
-					Color = Color.Orange,
-					Title = "Message persistant :",
-					Description = "Aucun message persistant n'a été trouvé dans ce channel.",
-					Footer = new EmbedFooterBuilder()
-					{
-						IconUrl = Functions.GetAvatarUrl(Context.User, 32),
-						Text = Context.User.Username + "#" + Context.User.Discriminator
-					}
-				};
-				await Context.Channel.SendMessageAsync("", false, embed.Build());
-			}
+					IconUrl = Functions.GetAvatarUrl(Context.User, 32),
+					Text = Context.User.Username + "#" + Context.User.Discriminator
+				}
+			};
+			await Context.Channel.SendMessageAsync("", false, embed.Build());
 		}
 	}
 }
