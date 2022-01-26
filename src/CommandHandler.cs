@@ -11,6 +11,7 @@ using Newtonsoft.Json;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net;
 
 namespace Hickz
 {
@@ -20,6 +21,7 @@ namespace Hickz
         private readonly DiscordSocketClient _client;
         private readonly IServiceProvider _services;
 		private Dictionary<ulong, SocketCommandContext> usersWaiting = new Dictionary<ulong, SocketCommandContext>();
+		private JObject config = Functions.GetConfig();
 
 		public CommandHandlingService(IServiceProvider services)
         {
@@ -48,8 +50,6 @@ namespace Hickz
 			{
 				if (react.UserId == key)
 				{
-					JObject config = Functions.GetConfig();
-					Console.WriteLine(react.Emote.Name);
 					if (react.Emote.Name == "hickz")
 					{
 						Stopwatch watcher = new Stopwatch();
@@ -112,7 +112,6 @@ namespace Hickz
 
 			int argPos = 0;
 
-			JObject config = Functions.GetConfig();
 			string[] prefixes = JsonConvert.DeserializeObject<string[]>(config["prefixes"].ToString());
 
 			// Check if message has any of the prefixes or mentiones the bot.
@@ -182,10 +181,53 @@ namespace Hickz
 			}
 		}
 
-        private async Task ClientReadyAsync()
-            => await Functions.SetBotStatusAsync(_client);
+		private async Task ClientReadyAsync()
+		{
+			int lastMemberCount = 0;
+			await Functions.SetBotStatusAsync(_client);
+			while (true)
+			{
+				Console.WriteLine("uuuuuuuuu");
+				var socketGuild = _client.GetGuild(JsonConvert.DeserializeObject<ulong>(config["hickzDiscordServerId"].ToString()));
+				var memberCountChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzTotalUsersChannel"].ToString()));
+				var serverStatusChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzServerStatusChannel"].ToString()));
+				// var serverConnectedUsersChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzServerConnectedUsersChannel"].ToString()));
+
+				string response;
+				try
+				{
+					response = new WebClient().DownloadString("http://localhost:30120/players.json");
+				}
+				catch (Exception)
+				{
+					response = null;
+				}
+
+				//if (response != null)
+				//{
+				//	await serverConnectedUsersChannel.ModifyAsync(prop => prop.Name = $" En ligne : {JsonConvert.DeserializeObject<PlayersInfo[]>(response).Length}/128");
+				//}
+
+				if (lastMemberCount != socketGuild.MemberCount)
+				{
+					await memberCountChannel.ModifyAsync(prop => prop.Name = $"👥 Membres : {socketGuild.MemberCount}");
+					lastMemberCount = socketGuild.MemberCount;
+				}
+				await serverStatusChannel.ModifyAsync(prop => prop.Name = $"🎮 → {(response != null ? $"🟢 | {JsonConvert.DeserializeObject<PlayersInfo[]>(response).Length}/128" : "🔴")}");
+				await Task.Delay(30000);
+			}
+		}
 
         public async Task InitializeAsync()
             => await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
-    }
+
+		private class PlayersInfo
+		{
+			private string endpoint { get; set; }
+			private int id { get; set; }
+			private string[] identifiers { get; set; }
+			private string name { get; set; }
+			private int ping { get; set; }
+		}
+	}
 }

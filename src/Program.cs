@@ -10,18 +10,19 @@ using System.IO;
 using System.Net;
 using System.IO.Compression;
 using System.Diagnostics;
+using System.ComponentModel;
+using Newtonsoft.Json;
 
 namespace Hickz
 {
 	public class Program
 	{
+		JObject config = Functions.GetConfig();
 
 		static void Main(string[] args) => new Program().MainAsync().GetAwaiter().GetResult();
 
 		public async Task MainAsync()
 		{
-			JObject config = Functions.GetConfig();
-
 			using var services = ConfigureServices();
 
 			Functions.ColoredMessage(ConsoleColor.Black, ConsoleColor.Yellow, "-> Le bot démarre...");
@@ -35,6 +36,8 @@ namespace Hickz
 			await client.StartAsync();
 
 			await services.GetRequiredService<CommandHandlingService>().InitializeAsync();
+			//services.GetRequiredService<ChannelManagerService>();
+
 			await Task.Delay(-1);
 		}
 
