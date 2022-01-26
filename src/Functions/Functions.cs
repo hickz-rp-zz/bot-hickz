@@ -74,16 +74,5 @@ namespace Hickz
 			Console.WriteLine(msg);
 			Console.ResetColor();
 		}
-
-		public static Database InitializeDatabase(string connectionString)
-		{
-			if (!Directory.Exists("db"))
-				Directory.CreateDirectory("db");
-
-			if (!File.Exists("db/persistent.db"))
-				File.Create("db/persistent.db").Close();
-
-			return new Database(connectionString);
-		}
 	}
 }

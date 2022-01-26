@@ -33,29 +33,6 @@ namespace Hickz
 			client.Log += Log;
 			services.GetRequiredService<CommandService>().Log += Log;
 
-			// Au démarrage, on récupère les ids des channels contenant des messages persistant et on les stock dans une variable
-			// pour que ce soit moins lourd à vérifier lors de l'envoie d'un message
-			Database database = Functions.InitializeDatabase(@"URI=file:db\persistent.db");
-
-			if (!database.IsTableExisting("persistent"))
-			{
-				database.CreateTable("persistent", "channel_id BIGINT PRIMARY KEY, embed_content VARCHAR(255), last_msg_id BIGINT, author_id BIGINT");
-			}
-			else
-			{
-				var reader = database.GetValuesFromTable("persistent");
-
-				while (reader.Read())
-					PersistentMessages.Channels.Add((ulong)reader.GetInt64(0), new object[]
-					{
-						(ulong)reader.GetInt64(2),
-						reader.GetString(1),
-						(ulong)reader.GetInt64(3),
-					}); // Ajoute l'id du channel et celle du message
-
-				reader.Close();
-			}
-
 			string token = config["token"].Value<string>();
 			await client.LoginAsync(TokenType.Bot, token);
 			await client.StartAsync();
