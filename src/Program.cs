@@ -20,9 +20,6 @@ namespace Hickz
 
 		public async Task MainAsync()
 		{
-			if (!Directory.Exists("data"))
-				Directory.CreateDirectory("data");
-
 			JObject config = Functions.GetConfig();
 
 			using var services = ConfigureServices();
