@@ -184,15 +184,14 @@ namespace Hickz
 		private async Task ClientReadyAsync()
 		{
 			int lastMemberCount = 0;
+			string lastResponse = "...";
 			await Functions.SetBotStatusAsync(_client);
+
+			var socketGuild = _client.GetGuild(JsonConvert.DeserializeObject<ulong>(config["hickzDiscordServerId"].ToString()));
+			var memberCountChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzTotalUsersChannel"].ToString()));
+			var serverStatusChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzServerStatusChannel"].ToString()));
 			while (true)
 			{
-				Console.WriteLine("uuuuuuuuu");
-				var socketGuild = _client.GetGuild(JsonConvert.DeserializeObject<ulong>(config["hickzDiscordServerId"].ToString()));
-				var memberCountChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzTotalUsersChannel"].ToString()));
-				var serverStatusChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzServerStatusChannel"].ToString()));
-				// var serverConnectedUsersChannel = socketGuild.GetChannel(JsonConvert.DeserializeObject<ulong>(config["hickzServerConnectedUsersChannel"].ToString()));
-
 				string response;
 				try
 				{
@@ -203,17 +202,18 @@ namespace Hickz
 					response = null;
 				}
 
-				//if (response != null)
-				//{
-				//	await serverConnectedUsersChannel.ModifyAsync(prop => prop.Name = $" En ligne : {JsonConvert.DeserializeObject<PlayersInfo[]>(response).Length}/128");
-				//}
-
 				if (lastMemberCount != socketGuild.MemberCount)
 				{
 					await memberCountChannel.ModifyAsync(prop => prop.Name = $"👥 Membres : {socketGuild.MemberCount}");
 					lastMemberCount = socketGuild.MemberCount;
 				}
-				await serverStatusChannel.ModifyAsync(prop => prop.Name = $"🎮 → {(response != null ? $"🟢 | {JsonConvert.DeserializeObject<PlayersInfo[]>(response).Length}/128" : "🔴")}");
+
+				if (lastResponse != response)
+				{
+					await serverStatusChannel.ModifyAsync(prop => prop.Name = $"🎮・{(response != null ? $"🟢 | {JsonConvert.DeserializeObject<PlayersInfo[]>(response).Length}/128" : "🔴")}");
+					lastResponse = response;
+				}
+
 				await Task.Delay(30000);
 			}
 		}
