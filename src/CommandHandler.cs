@@ -184,6 +184,7 @@ namespace Hickz
 		private async Task ClientReadyAsync()
 		{
 			int lastMemberCount = 0;
+			int lastPlyCount = -1;
 			string lastResponse = "...";
 			await Functions.SetBotStatusAsync(_client);
 
@@ -193,9 +194,11 @@ namespace Hickz
 			while (true)
 			{
 				string response;
+				int curPlyCount = 0;
 				try
 				{
 					response = new WebClient().DownloadString("http://localhost:30120/players.json");
+					curPlyCount = JsonConvert.DeserializeObject<PlayersInfo[]>(response).Length;
 				}
 				catch (Exception)
 				{
@@ -204,13 +207,14 @@ namespace Hickz
 
 				if (lastMemberCount != socketGuild.MemberCount)
 				{
-					await memberCountChannel.ModifyAsync(prop => prop.Name = $"👥 Membres : {socketGuild.MemberCount}");
+					await memberCountChannel.ModifyAsync(prop => prop.Name = $"👥・Membres : {socketGuild.MemberCount}");
 					lastMemberCount = socketGuild.MemberCount;
 				}
 
-				if (lastResponse != response)
+				if (lastResponse != response || lastPlyCount != curPlyCount)
 				{
-					await serverStatusChannel.ModifyAsync(prop => prop.Name = $"🎮・{(response != null ? $"🟢 | {JsonConvert.DeserializeObject<PlayersInfo[]>(response).Length}/128" : "🔴")}");
+					lastPlyCount = curPlyCount;
+					await serverStatusChannel.ModifyAsync(prop => prop.Name = $"🎮・{(response != null ? $"🟢 | {lastPlyCount}/128" : "🔴")}");
 					lastResponse = response;
 				}
 
